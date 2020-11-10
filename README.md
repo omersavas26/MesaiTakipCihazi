@@ -4,7 +4,7 @@
 
 Kütahya İl Özel İdaresi olarak geliştirmiş olduğumuz mesai takip cihazı. Yazılımı, devre tasarımı ve (3d yazdırılabilir) kutu tasarımı tamamen bize aittir. Tüm Raspberry Pi sürümleri ile çalışmaktadır. Fakat kutu RP3 için tasarlandığından diğer sürümleri için revizyon gerekir Cihaz kameranın bir özelliği olarak 135 derece oval fotoğraf almaktadır. Ayrıca yine kameranın bir özelliği olarak karanlık ortamlarda da -gece görüşü- fotoğraf alabilmektedir.
 
-13.56 Mhz rfid kart ile uyumludur. Kart okutulduğunda personelin resmini alır, led ışık ve ses ile sinyal verir, sonra belirtilen web servisine geçiş hakkında istek gönderir. Cevap olarak bir geçiş ID 'si ve personel ismini bekler. Istenilir ise kart okuduktan sonra bir turnikeye yada diğer bir donanıma tetikleme yapılabilir.
+13.56 Mhz rfid kart ile uyumludur. Kart okutulduğunda personelin resmini kaydeder, led ışık ve ses ile sinyal verir, sonra belirtilen web servisine geçiş hakkında istek gönderir (senkron yada asenkron seçebilirsiniz). Cevap olarak bir geçiş ID 'si ve personel ismini bekler. Istenilir ise kart okuduktan sonra bir turnikeye yada diğer bir donanıma tetikleme yapılabilir.
 
 Sunucuya ulaşamaz ise offline olarak çalışabilir. Çekilen fotoğraflar geçiş zaman bilgileri ile birlikte tutulur. Sonra merkezi bilgi sisteminiz ftp bağlantısı ile resimleri alıp dosya sunucunuza taşıyabilir. Yada "aktar.py" dosyası belirli peryotlarda çalıştırılarak (cron) istenilen sunucuya yükleme işlemi cihaz tarafından da yapılabilir.
 
