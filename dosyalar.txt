@@ -1,0 +1,6 @@
+index.py
+aktar.py
+guncelle.py
+temizle.py
+dosyalar.txt
+versiyon.txt

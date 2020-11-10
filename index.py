@@ -14,7 +14,7 @@ import threading
 import urllib
 import urllib2
 import sys
-#import json
+import json
 import picamera
 import logging
 import netifaces as ni
@@ -35,7 +35,7 @@ from PIL import ImageFont
 
 try:
 	
-	#Log Ayarlama
+	#Log Ayarlari
 	logger = logging.getLogger(__name__)
 	logger.setLevel(logging.INFO)
 
@@ -57,9 +57,9 @@ try:
 	yeniden_baslatma = True
 	basladi = False
 	oku = True
-	debug = True
+	debug = False
 	son_kesme = [0 for x in range(20)]
-	url = "http://sunucu/ana/url/"
+	url = "https://base.url/api/v1/"
 	son_id = ""
 	foto_yol = "/var/www/html/foto/"
 	ekran_zaman_asimi = 2
@@ -71,12 +71,13 @@ try:
 	mu_sifirla = False;
 	led_basla = 0
 	mesaj_ttl = 3
-	r = ["", "", ""]
+	last_response = None
 	buzzer = 4 #buzzer = 7  //7. bacak GPIO4
 	kirmizi_led = 23#kirmizi_led = 16
 	yesil_led = 24#yesil_led = 18
 	kapi = 17#kapi = 11
 	son_ip = None
+	token = "public"
 	
 	
 	#Nesneler
@@ -87,6 +88,12 @@ try:
 	rabbitConnection = None
 	rabbitChannel = None
 	mqtt_client = None
+	
+	
+	#Cihaz bilgileri
+	rfidCihazId = 0
+	anahtar = "anahtar"
+	aciklama = "    Kutahya Il Ozel Idaresi - Bilgi Islem Mudurlugu"
 
 	
 
@@ -113,7 +120,7 @@ try:
 			mqtt_client = paho.Client(IP())
 			mqtt_client.connect(mqtt_broker)
 			mqqt_konu_tanimla()
-		except Exception, ee:
+		except Exception as ee:
 			log_yaz(1, "Mqqt baslatilamadi: " + str(ee))
 		
 		
@@ -122,7 +129,7 @@ try:
 			global mqtt_client
 			mqtt_client.publish(s, m)
 			log_yaz(1, "Mqtt mesaj: " + str(s) + " --- " + str(m))
-		except Exception, ee:
+		except Exception as ee:
 			log_yaz(1, "Mqqt mesaj paylasilamadi: " + str(ee) + " - Mesaj: " + str(s) +  " --- " + str(m))
 		
 	def rabbit_baslat():
@@ -131,7 +138,7 @@ try:
 			rabbitConnection = pika.BlockingConnection(pika.ConnectionParameters('192.168.0.71'))
 			rabbitChannel = rabbitConnection.channel()
 			rabbitChannel.queue_declare(queue='logs')
-		except Exception, ee:
+		except Exception as ee:
 			log_yaz(1, "Rabbitmq baslatilamadi: " + str(ee))
 	
 	def rabbit_mesaj(m):
@@ -139,7 +146,7 @@ try:
 			global rabbitChannel
 			rabbitChannel.basic_publish(exchange='', routing_key='logs', body=m)
 			log_yaz(1, "Rabbit mesaj: " + str(m))
-		except Exception, ee:
+		except Exception as ee:
 			log_yaz(1, "Rabbitmq mesaj gonderilemedi: " + str(ee) + " - Mesaj: " + m)
 
 	def log_yaz(l, s):
@@ -147,22 +154,23 @@ try:
 		if l == 1:
 			if debug:
 				logger.info('%s', str(s))
-				print "LOG -> level:" + str(l) + " - " + str(s)
+				print("LOG -> level:" + str(l) + " - " + str(s))
 		else:
 			global log_random
-			print "LOG -> level:" + str(l) + " - " + str(s)
+			print("LOG -> level:" + str(l) + " - " + str(s))
 			m = '{ "kaynak":"MesaiCihazi", "kaynak_ip":"'+IP()+'", "log_random":"'+str(log_random)+'", "description":"'+str(s)+'"}'
-			asenkron_calistir(rabbit_mesaj, [m])
+			#asenkron_calistir(rabbit_mesaj, [m])
 		
 	def ip_yenile():
 		log_yaz(1, "IP yenileniyor")
 		os.system("systemctl restart dhcpcd")  
 		log_yaz(1, "IP yenilendi")
-		mqqt_konu_tanimla()
+		#mqqt_konu_tanimla()
 		
 	def ip_degisti():
-		asenkron_calistir(mqtt_baslat)
-		asenkron_calistir(rabbit_baslat)
+		i = 0
+		#asenkron_calistir(mqtt_baslat)
+		#asenkron_calistir(rabbit_baslat)
 
 	def IP():
 		try:
@@ -175,7 +183,7 @@ try:
 				son_ip = ipTemp
 				ip_degisti()
 			return ipTemp
-		except Exception, e:
+		except Exception as e:
 			log_yaz(1, "IP alinamadi: " + str(e))
 			if kesme_fark(5) > 60000:
 				log_yaz(1, "IP yenilenecek")
@@ -202,6 +210,7 @@ try:
 
 
 	def lcd_temp_sifirla():
+		global aciklama
 		ii = 0;
 		
 		lcd_x[ii] = 0;
@@ -213,7 +222,7 @@ try:
 		lcd_x[ii] = 0;
 		lcd_y[ii] = 20;
 		lcd_f[ii] = 18;
-		lcd_temp[ii] = "    Kutahya Il Ozel Idaresi - Bilgi Islem Mudurlugu";
+		lcd_temp[ii] = aciklama;
 		ii = ii + 1
 		
 		lcd_x[ii] = 0;
@@ -263,7 +272,7 @@ try:
 		#log_yaz(1, "Ekran guncelleme yapildi")
 		
 	def bilgi_guncelle():
-		global bilgi
+		global bilgi, aciklama
 		
 		lcd_temp_sifirla()
 		
@@ -277,7 +286,7 @@ try:
 		if bilgi == 0:
 			lcd_temp[1] = "    Kamerali mesai kontrol cihazi";
 		elif bilgi == 1:
-			lcd_temp[1] = "    Kutahya Il Ozel Idaresi - Bilgi Islem Mudurlugu";
+			lcd_temp[1] = aciklama;
 
 		bilgi += 1
 		
@@ -307,7 +316,7 @@ try:
 		
 		if kesme_fark(7) > 60000:
 			kesme_zaman_tut(7)
-			asenkron_calistir(mqtt_mesaj, [mqtt_subject_saglik, "1"])
+			#asenkron_calistir(mqtt_mesaj, [mqtt_subject_saglik, "1"])
 		
 		#log_yaz(1, "Zaman kesmesi sonu")  
 
@@ -343,13 +352,23 @@ try:
 		
 		log_yaz(1, "Cikislar ayarlandi")
 		
-		asenkron_calistir(rabbit_baslat)
+		#asenkron_calistir(rabbit_baslat)
 
 		log_yaz(1, "Rabbit ayarlandi")
 		
-		asenkron_calistir(mqtt_baslat)
+		#asenkron_calistir(mqtt_baslat)
 		
 		log_yaz(1, "Mqtt ayarlandi")
+		
+		global rfidCihazId, anahtar, aciklama
+		data = {}
+		with open('/var/www/html/cihaz.json', 'r') as cihaz:
+			data = json.load(cihaz)
+			rfidCihazId = data["rfidCihazId"]
+			anahtar = data["anahtar"]
+			aciklama = data["aciklama"]
+			
+		log_yaz(1, "Degiskenler ayarlandi")
 		
 	#def ses_cal_async(f, s):
 	def ses_cal(f, s):
@@ -419,50 +438,51 @@ try:
 
 	def sunucu(u):
 		try:
-			global r
-			r = ["","",""]
+			global last_response, url
+			last_response = None
 			
 			ctx = ssl.create_default_context()
 			ctx.check_hostname = False
 			ctx.verify_mode = ssl.CERT_NONE
 			
-			rr = urllib2.urlopen(url + u, timeout = 1, context=ctx)
-			rr = rr.read()
-			rr = rr.replace('{', '').replace('}', '').split(",") 
-			for t in rr:
-				t = t.replace('"', '').split(':')
-				r[int(t[0])] = t[1] 
+			rr = urllib2.urlopen(url + u, timeout = 3, context=ctx)			
+			last_response = json.load(rr) 
 			
-		except Exception, e:
+			
+		except Exception as e:
 			log_yaz(1, "Personel adi sunucudan alinirken hata olustu! " + str(e))
-			r = ["","",""]
+			last_response = None
 
 	def kart_okundu(fn, id):		
 		log_yaz(1, "Kart okundu: " + id)
 		
-		global r
+		global last_response, token, rfidCihazId, anahtar
 		
-		ip = IP()
-		#Tetiklenecek adres
-		u = "api/card_id/"+id.replace(" ", "%20")+"|"+ip
-		cal = threading.Thread(target=sunucu, args = (u, ))
-		cal.start()
-		cal.join(1)#Timeout 1
+		simdi = str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+		simdi = simdi.replace(" ", "%20")
 		
-		if r == ["","",""]:
-			tanimsiz_kart(fn, id)
+		requestUrl = token
+		requestUrl += "/tables/kullanci_rfid_gecisler/store?personel_id=&fotograf=&dosyalar=&rfid_cihaz_id="
+		requestUrl += str(rfidCihazId) +"&gecis_zamani=" + simdi 
+		requestUrl += "&state=1&column_set_id=9&anahtar=" +anahtar + "&kart_id="+id.replace(" ", "%20")
+		
+		#ASYNC
+		#cal = threading.Thread(target=sunucu, args = (requestUrl, ))
+		#cal.start()
+		#cal.join(2)#Timeout 1
+	
+		#SYNC
+		sunucu(requestUrl)
+		
+		if last_response == None:
+			tanimsiz_kart(fn, "**"+id)
 		else:
-			if r[0] == "OK":
-				if len(r[1]) > 0: 
-					mesaj(r[1])
-				else:
-					mesaj(id)
+			if last_response.has_key("user"):
+				mesaj(last_response["user"]["name"] + " " + last_response["user"]["surname"])
 		
-				os.rename(foto_yol + fn, foto_yol + "ID"+str(r[2])+".jpg")
+				os.rename(foto_yol + fn, foto_yol + "ID"+str(last_response["user"]["id"])+".jpg")
 			else:
 				tanimsiz_kart(fn, id)
-				
-		r = ["","",""]
 
 	def tanimsiz_kart(fn, id):
 		mesaj(id)
@@ -564,14 +584,14 @@ try:
 							kart_okundu(fn, son_id)
 							yesil_led_sondur(True)
 							
-except Exception, e:
+except Exception as e:
 	
 	try:
 		log_yaz(1, "Fonksiyon kontrol")
-	except Exception, ee:
+	except Exception as ee:
 		def log_yaz(l, s):
 			m = "Level: " + str(l) + " - " + str(s)
-			print m
+			print(m)
 			with open("/var/www/html/kartligiris.log", "a") as f:
 				f.write(m)
 	
@@ -591,5 +611,5 @@ except Exception, e:
 	GPIO.cleanup()
 	try:
 		rabbitConnection.close()
-	except Exception, ee:
-		print ""
+	except Exception as ee:
+		print("")
