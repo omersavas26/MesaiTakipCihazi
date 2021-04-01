@@ -124,4 +124,6 @@ Aynı anda hem cihazda hemde güncelleme sunucusunda bulunur. "./update.py" bu d
    
   
 	
-	
+v3 oled arduino ile sürülecek
+nano yerine mikro gelecek
+kondansatör koyulacak
