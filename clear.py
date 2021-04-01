@@ -1,3 +1,4 @@
+#@reboot python3 /var/www/html/clear.py &
 import RPi.GPIO as GPIO
 
 k_led = 23
