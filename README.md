@@ -47,6 +47,12 @@ Sunucudan güncel kullanıcı bilgisini ister ve "./file/users.json" dosyasını
 ### version.txt
 Aynı anda hem cihazda hemde güncelleme sunucusunda bulunur. "./update.py" bu dosyaya bakarak, sunucu üzerindeki dosyadan farklı ise güncelleme yapar.
 
+### lib/helper.py
+
+
+### lib/test[*].py
+
+
 ## Bileşenler
  1. Raspberry Pi (3 B+ önerilir)
  2. Mikro SD kart
@@ -122,8 +128,8 @@ Aynı anda hem cihazda hemde güncelleme sunucusunda bulunur. "./update.py" bu d
    
    
    
-  
-	
-v3 oled arduino ile sürülecek
-nano yerine mikro gelecek
-kondansatör koyulacak
+## Yapılacaklar
+
+1. Versiyon 3 'de oled arduino ile sürülecek, bu sayede raspberry pi açılana kadar ekranda bilgi mesajı basılacak.
+2. Arduino nano yerine arduino mikro kullanılacak
+3. Anlık enerji düşmesini engellemek için kondansatör koyulacak
