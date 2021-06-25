@@ -23,7 +23,7 @@ try:
 				temp = temp.split("-")				
 				card_id = temp[0]				
 				temp = temp[1].split("_")
-				dt = temp[0] + "-" + temp[1] + "-" + temp[2] + " " + temp[3] + ":" + temp[4] + ":" + temp[5]
+				dt = temp[0] + "-" + temp[1] + "-" + temp[2] + " " + temp[3] + ":" + temp[4] + ":00"
 				
 				url = get_url_for_rfid_readed(card_id, dt)
 				if url == "":
@@ -48,7 +48,7 @@ try:
 				return (temp[0], temp[1])
 				
 		except Exception as e:
-			log_e(e, "error in get_id_and_record_token_from_photo")
+			log_e(e, "error in get_id_and_record_token_from_photo: "+photo)
 			return ("", "")
 		
 	def run():

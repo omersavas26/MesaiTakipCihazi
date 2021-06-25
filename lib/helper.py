@@ -47,7 +47,7 @@ months = ["Oca", "Sub", "Mar", "Nis", "May", "Haz", "Tem", "Agu", "Eyl", "Eki", 
 
 restart = False
 started = False
-debug = True
+debug = False
 loop = False
 api_base_url = "https://kamu.kutahya.gov.tr/api/v1/"
 update_base_url = "https://kamu.kutahya.gov.tr/uploads/2021/01/01/mesaiTakipCihazi/"
@@ -59,6 +59,7 @@ ERROR = 3
 
 connected = False
 connection_control_timer_period = 50.0
+connection_controling = False
 
 auth = None
 
@@ -80,6 +81,7 @@ users = {}
 
 temp = False
 
+fileName = ""
 
 #### FUNCTIONS	####
 
@@ -114,7 +116,11 @@ def root_ex(file_name, e):
 		GPIO.cleanup()
 		
 		
-def preload(log_file_name, online = True, disp = "no", cam = False, pins = None, rf = False):
+def preload(log_file_name, online = True, disp = "no", cam = False, pins = None, rf = False):	
+	global started, fileName
+	
+	fileName = log_file_name
+	
 	log_init(log_file_name)	
 	log(INFO, "Starting...")
 	
@@ -488,25 +494,26 @@ def download_file(url, path, sllDisable = False):
 			cmd = cmd +" --no-check-certificate"
 			
 		temp = command(cmd)
-		
 		return True
 		
 	except Exception as e:
 		return False
 	
 def http_get(url, return_raw = False, j = False, force = False):
+	
+	global last_response, connected, lib_base_path, request_using
+	
 	try:
 		log(INFO, "Http GET ("+url+")")
-		global last_response, connected, lib_base_path, request_using
 		
-		request_using = True
-
 		if connected == False and force == False:
 			log(INFO, "Http GET by pass")
 			return
 			
+		last_response = None		
 		request_using = True
-		rt = requests.get(url, verify=lib_base_path+"kamu.ca-bundle")
+		
+		rt = requests.get(url, verify= False)
 		last_response = rt.text
 		
 		if return_raw:			
@@ -515,7 +522,7 @@ def http_get(url, return_raw = False, j = False, force = False):
 			return rt
 		elif j:
 			r = rt.json()
-			log(INFO, "Http GET OK (JSON)")
+			log(INFO, "Http GET OK (JSON)") 
 			request_using = False
 			return r
 		
@@ -535,16 +542,22 @@ def http_get(url, return_raw = False, j = False, force = False):
 			
 		log_e(e, "Http GET ERROR (url: " + url + ", text: "+text+")")
 		last_response = None
-		
+
 def http_post(url, data = None, files = None, return_raw = False, j = False, force = False):
+		
+	global last_response, lib_base_path, request_using, connected	
+		
 	try:
 		log(INFO, "Http POST ("+url+")")
+
+		if connected == False and force == False:
+			log(INFO, "Http GET by pass")
+			return		
 		
-		global last_response, lib_base_path, request_using		
-		last_response = None
-		
+		last_response = None		
 		request_using = True
-		rt = requests.post(url, data=data, files=files, verify=lib_base_path+"kamu.ca-bundle")
+		
+		rt = requests.post(url, data=data, files=files, verify=False)
 		last_response = rt.text
 		
 		if return_raw:
@@ -580,7 +593,7 @@ def get_url_for_rfid_readed(card_id, date_time = "now"):
 	
 	if auth == None:
 		return ""	
-	
+
 	return api_base_url + "device/" + auth["token"] + "/rfidReaded?card_id=" + encode_url(card_id) + "&time="+encode_url(date_time)
 	
 def get_url_for_send_photo():
@@ -642,7 +655,7 @@ def restart_ip():
 	
 def connection_control():
 	log(INFO, "Connection control")
-	global api_base_url, connected, loop, connection_control_timer_period, request_using
+	global api_base_url, connected, loop, connection_control_timer_period, request_using, connection_controling, started, fileName
 	
 	temp = threading.Timer(connection_control_timer_period, connection_control)
 	temp.daemon = True
@@ -652,24 +665,70 @@ def connection_control():
 		log(INFO, "Connection control by pass")
 		return
 		
-	data = http_get(api_base_url, j=True, force=True)
-	if data != None:
-		if data["status"] == "success":
+	if connection_controling:		
+		log(INFO, "Connection control by pass (connection_controling)")
+		return		
+		
+	connection_controling = True
+	
+	try:
+		data = http_get(api_base_url, j=True, force=True)
+		
+		if data == None:			
+			log(INFO, "Connection control error.")
+			connected = False
+			connection_controling = False
+			return
+		
+		if data["status"] != "success":
+			log(INFO, "Connection control error")
+			connected = False
+			connection_controling = False
+			return
+		
+		if connected == True:
+			log(INFO, "Connection control continue as True")
+			connection_controling = False
+			return
+			
+		if started != True:
+			log(INFO, "Connection control OK (started: False)")
+			connection_controling = False
+			connected = True	
+			return
+		
+		if fileName != "main.py":	
+			log(INFO, "Connection control OK")
+			connected = True	
+			connection_controling = False		
+			return
+		
+		log(INFO, "Connection changed False to True. Try fill auth and users")
+		
+		temp = log_and_run(fill_auth, True)
+		if temp == True:
+			temp = log_and_run(fill_users, True)
+			
+		if temp == True:				
 			connected = True			
 			log(INFO, "Connection control OK")
 		else:
-			connected = False
-			log(INFO, "Connection control error")
-	else:
+			log(INFO, "Connection control OK but Auth or Users fail")
+				
+	except Exception as e:
 		connected = False
-		log(INFO, "Connection control error.")
+		log_e(e, "Connection control error (ex).")
 	
+	connection_controling = False	
 	
 def to_json_str(o):
 	return json.dumps(o)
 		
 def from_json_str(str):
-	return json.load(str)
+	try:
+		return json.load(str) 
+	except Exception as e:
+		return json.loads(str)
 	
 def create_dir_if_not_exist(dir):
 	if os.path.isdir(dir) == False:
@@ -717,10 +776,10 @@ def read_from_file(file_path, j=False):
 		
 		rt = "".join(r)
 		
-		log(INFO, "Read from file OK ("+rt+")")
+		log(INFO, "Read from file OK ( "+rt+" )")
 		
 		if j:
-			return log_and_run(from_json_str(rt))
+			return log_and_run(from_json_str, rt)
 			
 		return rt
 		
@@ -732,24 +791,52 @@ def fill_auth(force = False):
 	global auth_py_file_path, auth_file_path, auth
 	
 	if force:
+		if os.path.isfile(auth_file_path):
+			log(INFO, "Delete old auth file")
+			os.remove(auth_file_path)
+	
 		cmd = "python3 "+auth_py_file_path
 		command(cmd)
 		
 	with open(auth_file_path, "r") as a:
 		auth = from_json_str(a)
 		
+	temp = "token" in auth.keys()
+	log(INFO, "Auth validation: " + str(temp))
+	return temp
+
 def fill_users(force = False):	
 	global update_users_list_py_file_path, users_list_path, users
 	
 	if force:
+		if os.path.isfile(users_list_path):
+			log(INFO, "Delete old users file")
+			os.remove(users_list_path)
+	
 		cmd = "python3 "+update_users_list_py_file_path
 		command(cmd)
 		
 	with open(users_list_path, "r") as a:
 		users = from_json_str(a)
 	
+	try:
+		temp = len(list(users.keys())[0].split(" ")) == 4
+		log(INFO, "Users validation: " + str(temp))
+		return temp
+	except Exception as e:
+		log_e(e, "Users validation exception")
+		return False
+	
 def command(cmd):
 	return os.popen(cmd).read()
 	
 def command_async(cmd):
 	return os.system(cmd)
+
+	
+#Processleri her seferinde durdurmamak için yazıldı. Sadece test methodudur.
+def killPyt():
+	ps = command("ps -A |grep py")
+	psSplit = ps.split(" ")
+	if len(psSplit)>12:
+		command("kill "+psSplit[1])

@@ -20,3 +20,4 @@ lib/testCamera.py
 lib/testOled.py
 lib/testPins.py
 lib/testRfid.py
+lib/testHelper.py

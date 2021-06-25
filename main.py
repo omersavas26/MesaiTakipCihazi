@@ -50,10 +50,17 @@ try:
 		
 		log_and_run(set_cam)		
 		
-		log_and_run(fill_auth, True)
-		log_and_run(fill_users, True)
+		temp = log_and_run(fill_auth, True)
+		if temp == True:
+			temp = log_and_run(fill_users, True)
+		else:
+			log_and_run(fill_users)
 		
 		log_and_run(connection_control)
+		
+		if temp == False:
+			log(INFO, "Users or Auth was failed")
+			h.connected = False
 		
 		log_and_run(fill_scene)
 		
@@ -103,7 +110,7 @@ try:
 		now = datetime.datetime.now()
 			
 		temp = str(now.strftime("%d aaa %H:%M:%S"));
-		temp = temp.replace("aaa", h.months[now.month])
+		temp = temp.replace("aaa", h.months[now.month-1])
 		
 		temp = temp.split(" ")
 		
@@ -461,8 +468,11 @@ try:
 							
 						log_and_run(clear_display)
 						
-						write_text_on_center_of_display(name, y = 5, font_size = 20)
-						write_text_on_center_of_display(surname, y = 32, font_size = 20)
+						write_text_on_center_of_display(name, y = 2, font_size = 20)
+						write_text_on_center_of_display(surname, y = 25, font_size = 20)
+						
+						temp = str(datetime.datetime.now().strftime("%H:%M"))
+						write_text_on_center_of_display(temp, y = 45, font_size = 20)
 						
 						time.sleep(1)
 											

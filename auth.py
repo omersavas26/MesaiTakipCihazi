@@ -13,8 +13,58 @@ file_name = os.path.basename(__file__)
 
 
 try:
+	def read_ssh_key():
+		data = read_from_file("/root/.ssh/id_rsa.pub")
+		if data == None:
+			cmd = 'ssh-keygen -b 2048 -t rsa -f /root/.ssh/id_rsa -q -N ""'
+			command(cmd)
+			data = read_from_file("/root/.ssh/id_rsa.pub")
+			
+			if data == None:
+				return None
+			
+		return data.strip('\n')
+	
+	def get_device_unique():
+		ssh_key = log_and_run(read_ssh_key)
+		params ={ 'ssh_anahtar': ssh_key }
+		
+		data = http_post(api_base_url+"rfidCihazAnahtarGetir", data=params, j=True)
+		if data == None:
+			log(ERROR, "Yeni anahtar alinamadi! (data: None, "+to_json_str(params)+")")
+			return ""
+			
+		if data["status"] != "success":
+			log(ERROR, "Yeni anahtar alinamadi! (data: "+to_json_str(data)+", params: "+to_json_str(params)+")")
+			return ""
+			
+		key = data["data"]["message"]
+		
+		macs = log_and_run(get_mac_adresses)		
+		serial = log_and_run(get_cpu_serial)
+		
+		return macs[0] + serial + macs[1] + key
+		
 	def get_auth():
-		return '{"token": "AzqUejyZD4II3n8Wt72d72", "id": 72, "name": "Test Cihazi"}'
+		unique = log_and_run(get_device_unique)
+		if unique == "": 
+			return ""
+			
+		params = {
+			"type": "rfid_cihazlar",
+			"unique": unique
+		}
+		
+		data = http_post(api_base_url+"deviceLogin", data=params, j=True)
+		if data == None:
+			log(ERROR, "Auth data alinamadi! (data: None, params: "+to_json_str(params)+")")
+			return ""
+		
+		if data["status"] != "success":
+			log(ERROR, "Auth data alinamadi! (data: "+to_json_str(data)+", params: "+to_json_str(params)+" )")
+			return ""
+				
+		return data["data"]
 		
 	def run():
 		auth = log_and_run(get_auth)
@@ -33,7 +83,41 @@ try:
 	def add_as_new_device():
 		global api_base_url
 	
-		print("send request to backend for new device store")
+		ips = log_and_run(get_ip_adresses)		
+		macs = log_and_run(get_mac_adresses)		
+		serial = log_and_run(get_cpu_serial)
+		unique = log_and_run(get_device_unique)
+		real_ip = log_and_run(get_real_ip)
+		cihaz_json = read_from_file("/var/www/html/cihaz.json")
+		ssh_key = log_and_run(read_ssh_key)
+		
+		
+		detail = {
+			"ips": ips,
+			"macs": macs,
+			"serial": serial,
+			"unique": unique,
+			"real_ip": real_ip,
+			"cihaz_json": cihaz_json,
+			"ssh_key": ssh_key
+		}
+		
+		params = {
+			"column_set_id": 120, 
+			"detail": to_json_str(detail),
+			"id": 0 
+		}
+		
+		url = api_base_url+"public/tables/yeni_cihazlar/store"
+		data = http_post(url, data=params, j=True)
+		
+		if data == None:
+			log(ERROR, "Yeni cihaz olarak eklenemedi! (data: None, params: "+to_json_str(params)+")")
+			return ""
+		
+		if data["status"] != "success":
+			log(ERROR, "Yeni cihaz olarak eklenemedi! (data: "+to_json_str(data)+", params: "+to_json_str(params)+" )")
+			return
 		
 
 	
