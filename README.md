@@ -48,9 +48,13 @@ Sunucudan güncel kullanıcı bilgisini ister ve "./file/users.json" dosyasını
 Aynı anda hem cihazda hemde güncelleme sunucusunda bulunur. "./update.py" bu dosyaya bakarak, sunucu üzerindeki dosyadan farklı ise güncelleme yapar.
 
 ### lib/helper.py
+Tüm jenerik methodları içerir.
 
+### lib/variables.py
+Backend servisleri ve cihazın çalışması ile alakalı ayarları içeren dosyadır. Cihazı "senkron çalışmaya zorla" yada yemekhane gibi konumlarda kullanmak için "otantike olamayan kullanıcıya röleyi tetikleme" gibi ayarları yapabilmenizi sağlar. Ayarlarınız güncelleme gelse bile değişmesin isterseniz aynı dizine "localVariables.py" dosyası ile özel ayarlarınızı yazarsınız. 
 
 ### lib/test[*].py
+Test scriptleri
 
 
 ## Bileşenler
