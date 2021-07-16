@@ -29,7 +29,8 @@ try:
 		ssh_key = log_and_run(read_ssh_key)
 		params ={ 'ssh_anahtar': ssh_key }
 		
-		data = http_post(api_base_url+"rfidCihazAnahtarGetir", data=params, j=True)
+		url = log_and_run(get_url_for_deg_device_key)
+		data = http_post(url, data=params, j=True)
 		if data == None:
 			log(ERROR, "Yeni anahtar alinamadi! (data: None, "+to_json_str(params)+")")
 			return ""
@@ -46,12 +47,14 @@ try:
 		return macs[0] + serial + macs[1] + key
 		
 	def get_auth():
+		global device_table_name
+				
 		unique = log_and_run(get_device_unique)
 		if unique == "": 
 			return ""
 			
 		params = {
-			"type": "rfid_cihazlar",
+			"type": device_table_name,
 			"unique": unique
 		}
 		
@@ -68,20 +71,23 @@ try:
 		
 	def run():
 		auth = log_and_run(get_auth)
-		
 		if auth != "":						
 			data = {
 				"token": auth["token"],
-				"id": auth["device"]["id"], 
-				"name": auth["device"]["name"]
+				"id": auth["device"]["id"]
 			}
+			
+			try:
+				data["name"] = auth["device"]["name"]
+			except Exception as e:
+				data["name"] = auth["device"]["name_basic"]
 						
 			write_to_file(h.auth_file_path, data, j = True)
 		else:
 			log_and_run(add_as_new_device)
 			
 	def add_as_new_device():
-		global api_base_url
+		global api_base_url, new_device_column_set_id
 	
 		ips = log_and_run(get_ip_adresses)		
 		macs = log_and_run(get_mac_adresses)		
@@ -103,7 +109,7 @@ try:
 		}
 		
 		params = {
-			"column_set_id": 120, 
+			"column_set_id": new_device_column_set_id, 
 			"detail": to_json_str(detail),
 			"id": 0 
 		}

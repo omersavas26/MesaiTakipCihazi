@@ -77,7 +77,7 @@ try:
 				files = {'fotograf[]': open(h.base_photo_path+"ID"+id+"_"+record_token+".jpg", 'rb')}
 				
 				log_and_run(limit_bandwith)
-				data = http_post(url, data = params, files = files, j = True)
+				data = http_post(url, data = params, files = files, j = True, to=100.0)
 				
 				if data != None:
 					if data["status"] == "success":
@@ -86,7 +86,7 @@ try:
 						log(WARNING, "Send file request end with error: " + to_json_str(data)) 
 										
 			except Exception as e:
-				print(e)
+				log_e(e, "Send photo error")
 				temp = None
 		
 

@@ -11,6 +11,8 @@ import helper as h
 
 file_name = os.path.basename(__file__)
 
+local_debug = True
+
 try:
 	def version_control():
 		version_file = "version.txt"
@@ -65,6 +67,8 @@ try:
 		
 		preload(file_name)
 						
+		h.debug = local_debug
+		
 		if h.connected:
 			log_and_run(run)
 		else:

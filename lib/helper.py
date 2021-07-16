@@ -3,7 +3,11 @@
 import sys
 import os
 import logging
+
 import requests
+from requests.packages.urllib3.exceptions import InsecureRequestWarning
+requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
+
 import json
 import signal
 import threading
@@ -25,6 +29,8 @@ import adafruit_ssd1306
 
 import picamera
 
+from variables import *
+
 
 
 ####	VARIABLES	####
@@ -34,6 +40,7 @@ logger = None
 log_base_path = "/var/www/html/log/"
 lib_base_path = "/var/www/html/lib/"
 app_base_path = "/var/www/html/"
+dateTimeSync_py_file_path = "/var/www/html/dateTimeSync.py"
 auth_file_path = "/var/www/html/file/auth.json"
 users_list_path = "/var/www/html/file/users.json"
 auth_py_file_path = "/var/www/html/auth.py"
@@ -49,8 +56,6 @@ restart = False
 started = False
 debug = False
 loop = False
-api_base_url = "https://kamu.kutahya.gov.tr/api/v1/"
-update_base_url = "https://kamu.kutahya.gov.tr/uploads/2021/01/01/mesaiTakipCihazi/"
 last_response = None
 
 INFO = 1
@@ -76,6 +81,7 @@ last_rfid_card_id = ""
 rfid_same_count = 1
 
 request_using = False
+requests_timeout = 5 
 
 users = {}
 
@@ -210,6 +216,8 @@ def rfid_init():
 	rfid = MFRC522.MFRC522()
 	
 def log(l, s):
+	global debug
+	
 	if debug:
 		_log(l, s)
 	elif l > 1:
@@ -217,7 +225,14 @@ def log(l, s):
 			
 def _log(l, s):
 	global logger
-	logger.info("%s", str(s))
+		
+	if l == 3:
+		logger.error("%s", str(s))
+	elif  l == 2:
+		logger.warning("%s", str(s))
+	else:
+		logger.info("%s", str(s))
+		
 	print("LOG -> level:" + str(l) + " - " + str(s))
 	
 def log_e(e, m):
@@ -499,9 +514,8 @@ def download_file(url, path, sllDisable = False):
 	except Exception as e:
 		return False
 	
-def http_get(url, return_raw = False, j = False, force = False):
-	
-	global last_response, connected, lib_base_path, request_using
+def http_get(url, return_raw = False, j = False, force = False, to = requests_timeout):	
+	global last_response, connected, lib_base_path, request_using, sll_verify
 	
 	try:
 		log(INFO, "Http GET ("+url+")")
@@ -513,7 +527,7 @@ def http_get(url, return_raw = False, j = False, force = False):
 		last_response = None		
 		request_using = True
 		
-		rt = requests.get(url, verify= False)
+		rt = requests.get(url, verify=sll_verify, timeout=to)
 		last_response = rt.text
 		
 		if return_raw:			
@@ -543,21 +557,20 @@ def http_get(url, return_raw = False, j = False, force = False):
 		log_e(e, "Http GET ERROR (url: " + url + ", text: "+text+")")
 		last_response = None
 
-def http_post(url, data = None, files = None, return_raw = False, j = False, force = False):
-		
-	global last_response, lib_base_path, request_using, connected	
+def http_post(url, data = None, files = None, return_raw = False, j = False, force = False, to = requests_timeout):		
+	global last_response, lib_base_path, request_using, connected, sll_verify
 		
 	try:
 		log(INFO, "Http POST ("+url+")")
 
 		if connected == False and force == False:
-			log(INFO, "Http GET by pass")
+			log(INFO, "Http POST by pass")
 			return		
 		
 		last_response = None		
 		request_using = True
 		
-		rt = requests.post(url, data=data, files=files, verify=False)
+		rt = requests.post(url, data=data, files=files, verify=sll_verify, timeout=to)
 		last_response = rt.text
 		
 		if return_raw:
@@ -595,6 +608,18 @@ def get_url_for_rfid_readed(card_id, date_time = "now"):
 		return ""	
 
 	return api_base_url + "device/" + auth["token"] + "/rfidReaded?card_id=" + encode_url(card_id) + "&time="+encode_url(date_time)
+	
+def get_url_for_deg_device_key():
+	global api_base_url, get_device_key_url_path
+	return api_base_url + get_device_key_url_path
+	
+def get_url_for_last_activity():
+	global api_base_url, auth
+	
+	if auth == None:
+		return api_base_url	
+
+	return api_base_url + "device/" + auth["token"] + "/lastActivity"
 	
 def get_url_for_send_photo():
 	global api_base_url, auth
@@ -655,7 +680,7 @@ def restart_ip():
 	
 def connection_control():
 	log(INFO, "Connection control")
-	global api_base_url, connected, loop, connection_control_timer_period, request_using, connection_controling, started, fileName
+	global connected, loop, connection_control_timer_period, request_using, connection_controling, started, fileName
 	
 	temp = threading.Timer(connection_control_timer_period, connection_control)
 	temp.daemon = True
@@ -672,7 +697,9 @@ def connection_control():
 	connection_controling = True
 	
 	try:
-		data = http_get(api_base_url, j=True, force=True)
+		
+		url = log_and_run(get_url_for_last_activity)
+		data = http_get(url, j=True, force=True)
 		
 		if data == None:			
 			log(INFO, "Connection control error.")
@@ -705,6 +732,8 @@ def connection_control():
 		
 		log(INFO, "Connection changed False to True. Try fill auth and users")
 		
+		log_and_run(sync_date_time)
+		
 		temp = log_and_run(fill_auth, True)
 		if temp == True:
 			temp = log_and_run(fill_users, True)
@@ -719,16 +748,24 @@ def connection_control():
 		connected = False
 		log_e(e, "Connection control error (ex).")
 	
-	connection_controling = False	
+	connection_controling = False
 	
 def to_json_str(o):
-	return json.dumps(o)
+	try:
+		return json.dumps(o)
+	except Exception as e:
+		log_e(e, "Json parse error in to_json_str");
+		return ""
 		
 def from_json_str(str):
 	try:
 		return json.load(str) 
 	except Exception as e:
-		return json.loads(str)
+		try:
+			return json.loads(str)
+		except Exception as e:
+			log_e(e, "Json encode error in from_json_str");
+			return None
 	
 def create_dir_if_not_exist(dir):
 	if os.path.isdir(dir) == False:
@@ -786,6 +823,12 @@ def read_from_file(file_path, j=False):
 	except Exception as e:
 		log_e(e, "Read from file error ("+file_path+")")
 		return None
+		
+def sync_date_time():	
+	global dateTimeSync_py_file_path
+	
+	cmd = "python3 "+dateTimeSync_py_file_path
+	command(cmd)
 			
 def fill_auth(force = False):	
 	global auth_py_file_path, auth_file_path, auth

@@ -1,4 +1,5 @@
-##@reboot sleep 10 && python3 /var/www/html/main.py &
+##@reboot sleep 10 && python3 /var/www/html/main.py & 
+##2021-07-16 12:00:00
 
 import os 
 import sys
@@ -29,10 +30,13 @@ scenes = []
 read_rfid_timer_period = 0.25	
 local_last_rfid_card_id = ""
 
-same_rfid_read_control = True
-local_debug = True
+last_rfid_card_id_remember_timeout = 75.0
+local_debug = False
 
 sendPhotoForever = False
+
+tanimsiz_kullanici_ad = "Tan\u0131ms\u0131z"
+tanimsiz_kullanici_soyad = "Kullan\u0131c\u0131"
 
 try:
 	def clear_pins():
@@ -56,11 +60,13 @@ try:
 		else:
 			log_and_run(fill_users)
 		
-		log_and_run(connection_control)
-		
 		if temp == False:
 			log(INFO, "Users or Auth was failed")
 			h.connected = False
+		else:		
+			h.connected = True
+			
+		log_and_run(connection_control)
 		
 		log_and_run(fill_scene)
 		
@@ -325,9 +331,7 @@ try:
 		record_token = temp[1]
 		
 		url = get_url_for_send_photo()
-		
-		print(id + " / " + record_token)
-		
+				
 		params = { "id": id, "record_token": record_token }
 		files = {'fotograf[]': open(h.base_photo_path+file, 'rb')}
 		
@@ -356,7 +360,7 @@ try:
 		display_using = False
 				
 	def same_rfid_read():
-		global display_using, green_led
+		global display_using
 							
 		if h.rfid_same_count == 4:
 			log(INFO, "show_ip_on_display will start")
@@ -367,9 +371,7 @@ try:
 		elif h.rfid_same_count == 8:
 			display_using = False
 			log_and_run(reboot_os)
-			return
-		else:
-			log_and_run(show_rfid_same_card_message_on_display)
+			return			
 			
 	def rfid_readed_request_async(card_id, photo_name):
 		global sendPhotoForever
@@ -392,16 +394,13 @@ try:
 			log(WARNING, "rfid_readed_request_async by pass (data)")
 			
 	def rfid_readed_request(params):
-		global sendPhotoForever
-		
-		t = "Tan\u0131ms\u0131z"
-		k = "Kullan\u0131c\u0131"
-		
+		global sendPhotoForever, tanimsiz_kullanici_ad, tanimsiz_kullanici_soyad
+				
 		try:
 			url = get_url_for_rfid_readed(params["card_id"])
 			if url == "":
 				log(WARNING, "rfid_readed_request by pass")
-				return (t, k)
+				return (tanimsiz_kullanici_ad, tanimsiz_kullanici_soyad)
 				
 			log_and_run(unlimit_bandwith)
 			data = http_get(url, j=True)
@@ -415,8 +414,8 @@ try:
 				log(INFO, "rfid_readed_request OK")
 				
 				if data["data"]["user"]["name"] == None:
-					data["data"]["user"]["name"] = t
-					data["data"]["user"]["surname"] = k
+					data["data"]["user"]["name"] = tanimsiz_kullanici_ad
+					data["data"]["user"]["surname"] = tanimsiz_kullanici_soyad
 					
 				return (data["data"]["user"]["name"], data["data"]["user"]["surname"])
 				
@@ -427,9 +426,23 @@ try:
 		except Exception as e:
 			log_e(e, "read_rfid rfid_readed_request")
 			return (t, k)
+			
+	def clear_local_last_rfid_card_id():
+		global local_last_rfid_card_id, local_debug
+		
+		temp = h.debug
+		if local_debug:
+			h.debug = True
+		
+		log(INFO, "clear_local_last_rfid_card_id running...")
+		local_last_rfid_card_id = ""
+		log(INFO, "clear_local_last_rfid_card_id OK")
+		
+		if local_debug:
+			h.debug = temp
 				
 	def read_rfid():
-		global green_led, display_using, read_rfid_timer_period, local_last_rfid_card_id, local_debug, same_rfid_read_control
+		global green_led, display_using, read_rfid_timer_period, local_last_rfid_card_id, local_debug, same_rfid_read_control, last_rfid_card_id_remember_timeout, rfid_read_mode_async, relay_only_true_user, tanimsiz_kullanici_ad, tanimsiz_kullanici_soyad
 		
 		while True:
 			if h.loop == False: break
@@ -446,18 +459,27 @@ try:
 					
 					display_using = True
 					
-					if same_rfid_read_control and local_last_rfid_card_id == card_id:
+					if local_last_rfid_card_id == card_id:
 						log_and_run(same_rfid_read)
-					else:
 						
-						pin_on(green_led, 1)
+						
+					if same_rfid_read_control and local_last_rfid_card_id == card_id:
+						log_and_run(show_rfid_same_card_message_on_display)
+					else:	
+						if relay_only_true_user == False:
+							pin_on(green_led, 1)
 						
 						local_last_rfid_card_id = card_id
 						
-						pin_on(buzzer_pin, time_out = 0.05)
-						pin_on(triger_pin, time_out = 0.05)
+						temp = threading.Timer(last_rfid_card_id_remember_timeout, clear_local_last_rfid_card_id)
+						temp.daemon = True
+						temp.start()						
 						
-						if card_id in h.users:						
+						if relay_only_true_user == False:
+							pin_on(buzzer_pin, time_out = 0.05)
+							pin_on(triger_pin, time_out = 0.05)
+						
+						if rfid_read_mode_async and card_id in h.users:						
 							log_and_run_async(rfid_readed_request_async, [card_id, photo_name])	
 							name = h.users[card_id]["name"]
 							surname = h.users[card_id]["surname"]
@@ -465,6 +487,13 @@ try:
 							log_and_run(wait_message)
 							
 							(name, surname) = log_and_run(rfid_readed_request, {"card_id": card_id, "photo_name": photo_name})
+							
+							if name != tanimsiz_kullanici_ad and surname != tanimsiz_kullanici_soyad and relay_only_true_user:
+								pin_on(green_led, 1)
+								pin_on(buzzer_pin, time_out = 0.05)
+								pin_on(triger_pin, time_out = 0.05)
+							elif rfid_read_mode_async == False:
+								pin_on(red_led, 1)
 							
 						log_and_run(clear_display)
 						
